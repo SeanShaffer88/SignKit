@@ -230,20 +230,24 @@ mod tests {
         assert_eq!(err.0, ERR_PLATFORM);
     }
 
-    /// Windows CI: WinVerifyTrust on a hand-built unsigned PE
-    /// must report "unsigned". The only tolerated escape is
-    /// ERR_NOT_SUPPORTED, if WinVerifyTrust is somehow
-    /// unavailable in the test environment — and the test
-    /// prints which path was taken so the log says which.
+    /// Windows CI: WinVerifyTrust on a real unsigned PE must
+    /// report "unsigned". The file under test is the running
+    /// test executable itself: a genuine unsigned PE. (The
+    /// hand-built PE fixture cannot serve here — it is a
+    /// structural fixture for the parser, and WinVerifyTrust
+    /// rejects it with TRUST_E_SUBJECT_FORM_UNKNOWN before
+    /// any signature check; that was CI run #1's failure.)
+    /// The only tolerated escape is ERR_NOT_SUPPORTED, if
+    /// WinVerifyTrust is somehow unavailable in the test
+    /// environment — and the test prints which path was
+    /// taken so the log says which.
     #[cfg(windows)]
     #[test]
     fn verify_unsigned_fixture_reports_unsigned() {
-        let dir = std::env::temp_dir().join(format!("signkit-winverify-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let f = dir.join("unsigned.exe");
-        std::fs::write(&f, crate::pe::tests_fixture::unsigned_pe64_exe()).unwrap();
-        let path = f.to_string_lossy().to_string();
+        let path = std::env::current_exe()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
         match crate::verify_path(&path) {
             Ok(text) => {
                 let v = crate::json::parse(&text).unwrap();
@@ -260,6 +264,5 @@ mod tests {
                 eprintln!("verify path taken: NOT_SUPPORTED escape ({msg})");
             }
         }
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }
